@@ -11,6 +11,7 @@ use std::sync::Mutex;
 use petgraph::Direction;
 use petgraph::stable_graph::{NodeIndex, StableDiGraph, StableGraph};
 use futures::future::{self, Future};
+use futures::sync::oneshot;
 
 use externs;
 use boxfuture::Boxable;
@@ -109,7 +110,8 @@ impl Entry {
           // Wrap the launch in future::lazy to defer it until after we're outside the Graph lock.
           let context = context_factory.create(entry_id);
           let node = n.clone();
-          future::lazy(move || node.run(context)).to_boxed()
+          let executor = context.core.runtime.get().executor();
+          oneshot::spawn(future::lazy(move || node.run(context)), &executor).to_boxed()
         }
         &EntryKey::Cyclic(_) => future::err(Failure::Noop(Noop::Cycle)).to_boxed(),
       };
